@@ -1,0 +1,24 @@
+* OpenBSD patch in pf: NAT source port translation for MAP-E customer edge
+
+MAP-E (RFC 7597) transports IPv4 packets across an IPv6 network using IP encapsulation. MAP-E uses a single IPv4 address for multiple customers. To distinguish customers at Border Relay, each Customer Edge must use an exclusive port set.
+
+This patch provides an option =map-e-portset= in [[https://man.openbsd.org/pf.4][pf(4)]] to specify the port set used in MAP-E Customer Edge. The following [[https://man.openbsd.org/pf.conf.5][pf.conf(5)]] example sets PSID offset to 4, PSID length to 6, and PSID to 20:
+
+#+begin_src conf
+  match out on $gif_if nat-to ($gif_if) map-e-portset 4/6/20
+#+end_src
+
+Note that, to work as a MAP-E Customer Edge, creating and configuring a tunneling [[https://man.openbsd.org/gif.4][gif(4)]] interface are also required.
+
+* How to use
+
+To apply this patch, you need to build OpenBSD from source.
+
+Follow the instructions in [[https://www.openbsd.org/faq/faq5.html#Bld][Building OpenBSD from Source (www.openbsd.org)]] and before building a new kernel, apply the path as follows.
+
+#+begin_src sh
+  cd /usr/src/
+  patch -p0 < /path/to/mape.patch
+#+end_src
+
+After applying the patch, continue to follow the above instructions.
