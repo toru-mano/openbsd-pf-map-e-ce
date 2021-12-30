@@ -22,3 +22,7 @@ Follow the instructions in [[https://www.openbsd.org/faq/faq5.html#Bld][Building
 #+end_src
 
 After applying the patch, continue to follow the above instructions.
+
+* Prerequisites
+
+- OpenBSD 7.0-stable amd64
