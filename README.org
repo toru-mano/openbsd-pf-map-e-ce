@@ -25,4 +25,5 @@ After applying the patch, continue to follow the above instructions.
 
 * Prerequisites
 
+- OpenBSD 7.1-stable amd64
 - OpenBSD 7.0-stable amd64
