@@ -1,0 +1,402 @@
+Index: regress/sbin/pfctl/Makefile
+===================================================================
+RCS file: /cvs/src/regress/sbin/pfctl/Makefile,v
+retrieving revision 1.236
+diff -u -p -u -p -b -r1.236 Makefile
+--- regress/sbin/pfctl/Makefile	23 Mar 2022 22:07:10 -0000	1.236
++++ regress/sbin/pfctl/Makefile	23 Oct 2022 04:29:21 -0000
+@@ -18,10 +18,10 @@ PFTESTS=1 2 3 4 5 6 7 8 9 10 11 12 13 14
+ PFTESTS+=28 29 30 31 32 34 35 36 38 39 40 41 44 46 47 48 49 50
+ PFTESTS+=52 53 54 55 56 57 60 61 65 66 67 68 69 70 71 72 73
+ PFTESTS+=74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96
+-PFTESTS+=97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 114
++PFTESTS+=97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 114 115
+ PFFAIL=1 2 3 4 5 6 7 8 11 12 13 14 15 16 17 19 20 23 25 27
+ PFFAIL+=30 37 38 39 40 41 42 43 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62
+-PFFAIL+=63 64 65 66 67
++PFFAIL+=63 64 65 66 67 68
+ PFSIMPLE=1 2
+ PFSETUP=1 4
+ PFLOAD=1 2 3 4 5 7 8 9 10 11 12 13 14 15 16 17 18 19 20 23 24 25 26 27 28 29
+Index: regress/sbin/pfctl/pf115.in
+===================================================================
+RCS file: regress/sbin/pfctl/pf115.in
+diff -N regress/sbin/pfctl/pf115.in
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ regress/sbin/pfctl/pf115.in	23 Oct 2022 04:29:21 -0000
+@@ -0,0 +1 @@
++pass out on lo0 nat-to (lo0) map-e-portset 1/2/3
+Index: regress/sbin/pfctl/pf115.ok
+===================================================================
+RCS file: regress/sbin/pfctl/pf115.ok
+diff -N regress/sbin/pfctl/pf115.ok
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ regress/sbin/pfctl/pf115.ok	23 Oct 2022 04:29:21 -0000
+@@ -0,0 +1 @@
++pass out on lo0 all flags S/SA nat-to (lo0) round-robin map-e-portset 1/2/3
+Index: regress/sbin/pfctl/pfail68.in
+===================================================================
+RCS file: regress/sbin/pfctl/pfail68.in
+diff -N regress/sbin/pfctl/pfail68.in
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ regress/sbin/pfctl/pfail68.in	23 Oct 2022 04:29:21 -0000
+@@ -0,0 +1,9 @@
++match out on lo0 nat-to (lo0) map-e-portset 1/2/3 map-e-portset 4/5/6
++match out on lo0 nat-to (lo0) map-e-portset 0/2/3
++match out on lo0 nat-to (lo0) map-e-portset 16/2/3
++match out on lo0 nat-to (lo0) map-e-portset 8/10/3
++match out on lo0 nat-to (lo0) map-e-portset 1/2/-1
++match out on lo0 nat-to (lo0) map-e-portset 1/10/1024
++match out on lo0 rdr-to (lo0) map-e-portset 1/2/3
++match out on lo0 nat-to (lo0) static-port map-e-portset 1/2/3
++match out on lo0 nat-to (lo0) port 1000:2000 map-e-portset 1/2/3
+Index: regress/sbin/pfctl/pfail68.ok
+===================================================================
+RCS file: regress/sbin/pfctl/pfail68.ok
+diff -N regress/sbin/pfctl/pfail68.ok
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ regress/sbin/pfctl/pfail68.ok	23 Oct 2022 04:29:21 -0000
+@@ -0,0 +1,15 @@
++stdin:1: map-e-portset cannot be redefined
++stdin:2: MAP-E PSID offset must be 1-15: 0
++stdin:3: MAP-E PSID offset must be 1-15: 16
++stdin:4: invalid MAP-E PSID length: 10
++stdin:5: invalid MAP-E PSID: -1
++stdin:6: invalid MAP-E PSID: 1024
++stdin:7: the 'map-e-portset' option is only valid with nat rules
++stdin:7: skipping rule due to errors
++stdin:7: rule expands to no valid combination
++stdin:8: the 'map-e-portset' option can't be used with 'static-port'
++stdin:8: skipping rule due to errors
++stdin:8: rule expands to no valid combination
++stdin:9: the 'map-e-portset' option can't be used when specifying a port range
++stdin:9: skipping rule due to errors
++stdin:9: rule expands to no valid combination
+Index: sbin/pfctl/parse.y
+===================================================================
+RCS file: /cvs/src/sbin/pfctl/parse.y,v
+retrieving revision 1.712
+diff -u -p -u -p -b -r1.712 parse.y
+--- sbin/pfctl/parse.y	23 Sep 2022 21:33:17 -0000	1.712
++++ sbin/pfctl/parse.y	23 Oct 2022 04:29:25 -0000
+@@ -213,6 +213,7 @@ struct pool_opts {
+ 	int			 type;
+ 	int			 staticport;
+ 	struct pf_poolhashkey	*key;
++	struct pf_mape_port	 mape;
+ 
+ } pool_opts;
+ 
+@@ -477,6 +478,7 @@ int	parseport(char *, struct range *r, i
+ %token	SYNPROXY FINGERPRINTS NOSYNC DEBUG SKIP HOSTID
+ %token	ANTISPOOF FOR INCLUDE MATCHES
+ %token	BITMASK RANDOM SOURCEHASH ROUNDROBIN LEASTSTATES STATICPORT PROBABILITY
++%token	MAPEPORTSET
+ %token	WEIGHT BANDWIDTH FLOWS QUANTUM
+ %token	QUEUE PRIORITY QLIMIT RTABLE RDOMAIN MINIMUM BURST PARENT
+ %token	LOAD RULESET_OPTIMIZATION RTABLE RDOMAIN PRIO ONCE DEFAULT DELAY
+@@ -3691,6 +3693,29 @@ pool_opt	: BITMASK	{
+ 			pool_opts.marker |= POM_STICKYADDRESS;
+ 			pool_opts.opts |= PF_POOL_STICKYADDR;
+ 		}
++		| MAPEPORTSET number '/' number '/' number {
++			if (pool_opts.mape.offset) {
++				yyerror("map-e-portset cannot be redefined");
++				YYERROR;
++			}
++			if ($2 <= 0 || $2 >= 16) {
++				yyerror("MAP-E PSID offset must be 1-15: %lld",
++				    $2);
++				YYERROR;
++			}
++			if ($4 <= 0 || $2 + $4 > 16) {
++				yyerror("invalid MAP-E PSID length: %lld", $4);
++				YYERROR;
++			}
++			if ($6 < 0 || $6 >= (1 << $4)) {
++				yyerror("invalid MAP-E PSID: %lld", $6);
++				YYERROR;
++			}
++			pool_opts.mape.offset = $2;
++			pool_opts.mape.psidlen = $4;
++			pool_opts.mape.psid = $6;
++		}
++
+ 		;
+ 
+ routespec	: redirspec pool_opts {
+@@ -4562,6 +4587,25 @@ apply_redirspec(struct pf_pool *rpool, s
+ 		rpool->proxy_port[0] = 0;
+ 		rpool->proxy_port[1] = 0;
+ 	}
++	if (rs->pool_opts.mape.offset) {
++		if (isrdr) {
++			yyerror("the 'map-e-portset' option is only valid with "
++			    "nat rules");
++			return (1);
++		}
++		if (rs->pool_opts.staticport) {
++			yyerror("the 'map-e-portset' option can't be used with "
++			    "'static-port'");
++			return (1);
++		}
++		if (rpool->proxy_port[0] != PF_NAT_PROXY_PORT_LOW &&
++		    rpool->proxy_port[1] != PF_NAT_PROXY_PORT_HIGH) {
++			yyerror("the 'map-e-portset' option can't be used when "
++			    "specifying a port range");
++			return (1);
++		}
++		rpool->mape = rs->pool_opts.mape;
++	}
+ 
+ 	return (0);
+ }
+@@ -4979,6 +5023,7 @@ lookup(char *s)
+ 		{ "load",		LOAD},
+ 		{ "log",		LOG},
+ 		{ "loginterface",	LOGINTERFACE},
++		{ "map-e-portset",	MAPEPORTSET},
+ 		{ "match",		MATCH},
+ 		{ "matches",		MATCHES},
+ 		{ "max",		MAXIMUM},
+Index: sbin/pfctl/pfctl_parser.c
+===================================================================
+RCS file: /cvs/src/sbin/pfctl/pfctl_parser.c,v
+retrieving revision 1.346
+diff -u -p -u -p -b -r1.346 pfctl_parser.c
+--- sbin/pfctl/pfctl_parser.c	1 Feb 2021 00:31:04 -0000	1.346
++++ sbin/pfctl/pfctl_parser.c	23 Oct 2022 04:29:25 -0000
+@@ -518,6 +518,10 @@ print_pool(struct pf_pool *pool, u_int16
+ 		printf(" sticky-address");
+ 	if (id == PF_POOL_NAT && p1 == 0 && p2 == 0)
+ 		printf(" static-port");
++	if (pool->mape.offset) {
++		printf(" map-e-portset %u/%u/%u", pool->mape.offset,
++		    pool->mape.psidlen, pool->mape.psid);
++	}
+ }
+ 
+ const char	*pf_reasons[PFRES_MAX+1] = PFRES_NAMES;
+Index: share/man/man5/pf.conf.5
+===================================================================
+RCS file: /cvs/src/share/man/man5/pf.conf.5,v
+retrieving revision 1.597
+diff -u -p -u -p -b -r1.597 pf.conf.5
+--- share/man/man5/pf.conf.5	24 Jul 2022 12:22:12 -0000	1.597
++++ share/man/man5/pf.conf.5	23 Oct 2022 04:29:26 -0000
+@@ -1101,6 +1101,20 @@ rules, the
+ option prevents
+ .Xr pf 4
+ from modifying the source port on TCP and UDP packets.
++.It Cm map-e-portset Ar psid-offset Ns / Ns Ar psid-length Ns / Ns Ar psid
++With
++.Cm nat-to
++rules, the
++.Cm map-e-portset
++option enables the source port translation of MAP-E (RFC 7597) Customer
++Edge. The following example sets PSID offset to 4, PSID length to 6, and PSID to
++20:
++.Bd -literal -offset indent
++match out on $gif_if nat-to ($gif_if) map-e-portset 4/6/20
++.Ed
++.Pp
++Note that, to work as a MAP-E Customer Edge, creating and configuring a
++tunneling interface are also required.
+ .El
+ .Pp
+ When more than one redirection address or a table is specified,
+@@ -2825,7 +2839,8 @@ filteropt      = user | group | flags | 
+                  "rdr-to" ( redirhost | "{" redirhost-list "}" )
+                  [ portspec ] [ pooltype ] |
+                  "nat-to" ( redirhost | "{" redirhost-list "}" )
+-                 [ portspec ] [ pooltype ] [ "static-port" ] |
++                 [ portspec ] [ pooltype ] [ "static-port" ]
++                 [ "map-e-portset" number "/" number "/" number ] |
+                  [ route ] | [ "set tos" tos ] |
+                  [ [ "!" ] "received-on" ( interface-name | interface-group ) ]
+ 
+Index: sys/net/pf_lb.c
+===================================================================
+RCS file: /cvs/src/sys/net/pf_lb.c,v
+retrieving revision 1.72
+diff -u -p -u -p -b -r1.72 pf_lb.c
+--- sys/net/pf_lb.c	31 Aug 2022 11:29:12 -0000	1.72
++++ sys/net/pf_lb.c	23 Oct 2022 04:29:29 -0000
+@@ -95,8 +95,14 @@
+ u_int64_t		 pf_hash(struct pf_addr *, struct pf_addr *,
+ 			    struct pf_poolhashkey *, sa_family_t);
+ int			 pf_get_sport(struct pf_pdesc *, struct pf_rule *,
++			    struct pf_addr *, u_int16_t *,
++			    struct pf_src_node **);
++int			 pf_get_sport_range(struct pf_pdesc *, struct pf_rule *,
+ 			    struct pf_addr *, u_int16_t *, u_int16_t,
+ 			    u_int16_t, struct pf_src_node **);
++int			 pf_get_sport_mape(struct pf_pdesc *, struct pf_rule *,
++			    struct pf_addr *, u_int16_t *,
++			    struct pf_src_node **);
+ int			 pf_map_addr_states_increase(sa_family_t,
+ 				struct pf_pool *, struct pf_addr *);
+ int			 pf_get_transaddr_af(struct pf_rule *,
+@@ -147,20 +153,12 @@ pf_hash(struct pf_addr *inaddr, struct p
+ 
+ int
+ pf_get_sport(struct pf_pdesc *pd, struct pf_rule *r,
+-    struct pf_addr *naddr, u_int16_t *nport, u_int16_t low, u_int16_t high,
+-    struct pf_src_node **sn)
++    struct pf_addr *naddr, u_int16_t *nport, struct pf_src_node **sn)
+ {
+-	struct pf_state_key_cmp	key;
+-	struct pf_addr		init_addr;
+-	u_int16_t		cut;
+-	int			dir = (pd->dir == PF_IN) ? PF_OUT : PF_IN;
+-	int			sidx = pd->sidx;
+-	int			didx = pd->didx;
++	u_int16_t low, high;
+ 
+-	memset(&init_addr, 0, sizeof(init_addr));
+-	if (pf_map_addr(pd->naf, r, &pd->nsaddr, naddr, &init_addr, sn, &r->nat,
+-	    PF_SN_NAT))
+-		return (1);
++	low = r->nat.proxy_port[0];
++	high = r->nat.proxy_port[1];
+ 
+ 	if (pd->proto == IPPROTO_ICMP) {
+ 		if (pd->ndport == htons(ICMP_ECHO)) {
+@@ -179,6 +177,39 @@ pf_get_sport(struct pf_pdesc *pd, struct
+ 	}
+ #endif /* INET6 */
+ 
++	if (r->nat.mape.offset) {
++		if (pf_get_sport_mape(pd, r, naddr, nport, sn)) {
++			DPFPRINTF(LOG_NOTICE,
++			    "pf: MAP-E port allocation (%u/%u/%u) failed",
++			    r->nat.mape.offset, r->nat.mape.psidlen,
++			    r->nat.mape.psid);
++			return (-1);
++		}
++	} else if (pf_get_sport_range(pd, r, naddr, nport, low, high, sn)) {
++		DPFPRINTF(LOG_NOTICE,
++		    "pf: NAT proxy port allocation (%u-%u) failed", low, high);
++		return (-1);
++	}
++	return (0);
++}
++
++int
++pf_get_sport_range(struct pf_pdesc *pd, struct pf_rule *r,
++    struct pf_addr *naddr, u_int16_t *nport, u_int16_t low, u_int16_t high,
++    struct pf_src_node **sn)
++{
++	struct pf_state_key_cmp	key;
++	struct pf_addr		init_addr;
++	u_int16_t		cut;
++	int			dir = (pd->dir == PF_IN) ? PF_OUT : PF_IN;
++	int			sidx = pd->sidx;
++	int			didx = pd->didx;
++
++	memset(&init_addr, 0, sizeof(init_addr));
++	if (pf_map_addr(pd->naf, r, &pd->nsaddr, naddr, &init_addr, sn, &r->nat,
++	    PF_SN_NAT))
++		return (1);
++
+ 	do {
+ 		key.af = pd->naf;
+ 		key.proto = pd->proto;
+@@ -265,6 +296,40 @@ pf_get_sport(struct pf_pdesc *pd, struct
+ }
+ 
+ int
++pf_get_sport_mape(struct pf_pdesc *pd, struct pf_rule *r,
++    struct pf_addr *naddr, u_int16_t *nport, struct pf_src_node **sn)
++{
++	u_int16_t	 psmask, low, high,highmask;
++	u_int16_t	 alow, ahigh, cut, tmp;
++	int		 ashift, psidshift;
++
++	ashift = 16 - r->nat.mape.offset;
++	psidshift = ashift - r->nat.mape.psidlen;
++	psmask = r->nat.mape.psid & ((1U << r->nat.mape.psidlen) - 1);
++	psmask = psmask << psidshift;
++	highmask = (1U << psidshift) - 1;
++
++	alow = 1;
++	ahigh = (1U << r->nat.mape.offset) - 1;
++	cut = arc4random_uniform(1 + ahigh - alow) + alow;
++
++	for (tmp = cut; tmp <= ahigh; ++tmp) {
++		low = (tmp << ashift) | psmask;
++		high = low | highmask;
++		if(!pf_get_sport_range(pd, r, naddr, nport, low, high, sn))
++			return (0);
++	}
++	for (tmp = cut - 1; tmp >= alow; --tmp) {
++		low = (tmp << ashift) | psmask;
++		high = low | highmask;
++		if(!pf_get_sport_range(pd, r, naddr, nport, low, high, sn))
++			return (0);
++	}
++	return (1);
++}
++
++
++int
+ pf_map_addr_sticky(sa_family_t af, struct pf_rule *r, struct pf_addr *saddr,
+     struct pf_addr *naddr, struct pf_src_node **sns, struct pf_pool *rpool,
+     enum pf_sn_types type)
+@@ -716,14 +781,8 @@ pf_get_transaddr(struct pf_rule *r, stru
+ 		/* XXX is this right? what if rtable is changed at the same
+ 		 * XXX time? where do I need to figure out the sport? */
+ 		nport = 0;
+-		if (pf_get_sport(pd, r, &naddr, &nport,
+-		    r->nat.proxy_port[0], r->nat.proxy_port[1], sns)) {
+-			DPFPRINTF(LOG_NOTICE,
+-			    "pf: NAT proxy port allocation (%u-%u) failed",
+-			    r->nat.proxy_port[0],
+-			    r->nat.proxy_port[1]);
++		if (pf_get_sport(pd, r, &naddr, &nport, sns))
+ 			return (-1);
+-		}
+ 		*nr = r;
+ 		pf_addrcpy(&pd->nsaddr, &naddr, pd->af);
+ 		pd->nsport = nport;
+@@ -786,14 +845,8 @@ pf_get_transaddr_af(struct pf_rule *r, s
+ 
+ 	/* get source address and port */
+ 	nport = 0;
+-	if (pf_get_sport(pd, r, &nsaddr, &nport,
+-	    r->nat.proxy_port[0], r->nat.proxy_port[1], sns)) {
+-		DPFPRINTF(LOG_NOTICE,
+-		    "pf: af-to NAT proxy port allocation (%u-%u) failed",
+-		    r->nat.proxy_port[0],
+-		    r->nat.proxy_port[1]);
++	if (pf_get_sport(pd, r, &nsaddr, &nport, sns))
+ 		return (-1);
+-	}
+ 	pd->nsport = nport;
+ 
+ 	if (pd->proto == IPPROTO_ICMPV6 && pd->naf == AF_INET) {
+Index: sys/net/pfvar.h
+===================================================================
+RCS file: /cvs/src/sys/net/pfvar.h,v
+retrieving revision 1.510
+diff -u -p -u -p -b -r1.510 pfvar.h
+--- sys/net/pfvar.h	3 Sep 2022 14:57:54 -0000	1.510
++++ sys/net/pfvar.h	23 Oct 2022 04:29:29 -0000
+@@ -339,10 +339,17 @@ struct pf_poolhashkey {
+ #define key32	pfk.key32
+ };
+ 
++struct pf_mape_port {
++	u_int8_t		 offset;
++	u_int8_t		 psidlen;
++	u_int16_t		 psid;
++};
++
+ struct pf_pool {
+ 	struct pf_addr_wrap	 addr;
+ 	struct pf_poolhashkey	 key;
+ 	struct pf_addr		 counter;
++	struct pf_mape_port	 mape;
+ 	char			 ifname[IFNAMSIZ];
+ 	struct pfi_kif		*kif;
+ 	int			 tblidx;
